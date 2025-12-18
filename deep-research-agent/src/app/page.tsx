@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { MultiAgentVisualizer } from "@/components/multi-agent-visualizer";
 import {
   Send,
   Sparkles,
@@ -27,7 +28,9 @@ export default function Home() {
     finalReport,
     error,
     startResearch,
-    stats
+    stats,
+    agents,
+    activeAgents
   } = useResearch();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -172,7 +175,10 @@ export default function Home() {
                       </div>
                       <div className="bg-purple-50 rounded-lg p-4 text-center">
                         <p className="text-2xl font-bold text-purple-600">{stats.agents}</p>
-                        <p className="text-sm text-gray-600">Agents</p>
+                        <p className="text-sm text-gray-600">Total Agents</p>
+                        {activeAgents > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">({activeAgents} active)</p>
+                        )}
                       </div>
                     </div>
 
@@ -223,34 +229,8 @@ export default function Home() {
 
           {/* Right Column - Sidebar */}
           <div className="space-y-6">
-            {/* Agent Architecture */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Agent Architecture</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <AgentRole
-                  color="bg-purple-500"
-                  name="Orchestrator"
-                  description="Plans & coordinates"
-                />
-                <AgentRole
-                  color="bg-blue-500"
-                  name="Searcher"
-                  description="Finds sources via Exa"
-                />
-                <AgentRole
-                  color="bg-green-500"
-                  name="Analyzer"
-                  description="Extracts insights"
-                />
-                <AgentRole
-                  color="bg-orange-500"
-                  name="Writer"
-                  description="Creates report"
-                />
-              </CardContent>
-            </Card>
+            {/* Multi-Agent Visualizer */}
+            <MultiAgentVisualizer agents={agents} />
 
             {/* Example Queries */}
             <Card>
@@ -298,18 +278,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-    </div>
-  );
-}
-
-function AgentRole({ color, name, description }: { color: string; name: string; description: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className={`h-2.5 w-2.5 rounded-full ${color}`} />
-      <div>
-        <p className="font-medium text-gray-900 text-sm">{name}</p>
-        <p className="text-xs text-gray-500">{description}</p>
-      </div>
     </div>
   );
 }

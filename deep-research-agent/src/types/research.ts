@@ -52,3 +52,65 @@ export interface AgentMessage {
   step?: ResearchStep;
   report?: ResearchReport;
 }
+
+/**
+ * Multi-Agent System Types
+ */
+
+export interface AgentInfo {
+  agentId: string;
+  role: "orchestrator" | "searcher" | "analyzer" | "writer";
+  task: string;
+  status: "active" | "completed" | "failed";
+  toolCallCount: number;
+  startTime: Date;
+  endTime?: Date;
+}
+
+export interface AgentEvent {
+  type: "agent_started" | "agent_completed" | "tool_started" | "tool_completed";
+  agentId: string;
+  role?: "orchestrator" | "searcher" | "analyzer" | "writer";
+  task?: string;
+  toolName?: string;
+  input?: Record<string, unknown>;
+  success?: boolean;
+  status?: "completed" | "failed";
+  duration?: number;
+  timestamp: Date;
+}
+
+export interface AgentStats {
+  totalAgents: number;
+  activeAgents: number;
+  completedAgents: number;
+  failedAgents: number;
+  totalToolCalls: number;
+  searchCalls: number;
+  contentFetches: number;
+}
+
+export interface ResearchMessage {
+  id: string;
+  type: "status" | "assistant" | "tool_use" | "tool_result" | "result" | "error" | "agent_event" | "agent_stats";
+  content?: string;
+  status?: string;
+  message?: string;
+  topic?: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+  result_summary?: string;
+  error?: string;
+  event?: AgentEvent;
+  stats?: AgentStats;
+  timestamp: Date;
+}
+
+export interface ResearchStats {
+  searches: number;
+  sources: number;
+  agents: number;
+  turns: number;
+  duration: number;
+  estimatedCost: number;
+}

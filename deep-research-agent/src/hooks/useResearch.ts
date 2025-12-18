@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { AgentInfo, AgentEvent, AgentStats } from "@/types/research";
 
 export interface ResearchMessage {
   id: string;
-  type: "status" | "system" | "assistant" | "tool_use" | "tool_result" | "result" | "error" | "debug";
+  type: "status" | "system" | "assistant" | "tool_use" | "tool_result" | "result" | "error" | "debug" | "agent_event" | "agent_stats";
   content?: string;
   status?: string;
   message?: string;
@@ -14,6 +15,8 @@ export interface ResearchMessage {
   session_id?: string;
   error?: string;
   raw_type?: string;
+  event?: AgentEvent;
+  stats?: AgentStats;
   timestamp: Date;
 }
 
@@ -33,6 +36,9 @@ export interface UseResearchReturn {
   finalReport: string | undefined;
   error: string | undefined;
   stats: ResearchStats;
+  agents: AgentInfo[];
+  agentEvents: AgentEvent[];
+  activeAgents: number;
   startResearch: (topic: string) => Promise<void>;
   clearMessages: () => void;
 }
@@ -53,6 +59,8 @@ export function useResearch(): UseResearchReturn {
   const [finalReport, setFinalReport] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [stats, setStats] = useState<ResearchStats>(initialStats);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const messageIdRef = useRef(0);
   const startTimeRef = useRef<number>(0);
 
@@ -63,6 +71,49 @@ export function useResearch(): UseResearchReturn {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, newMessage]);
+
+    // Handle agent events
+    if (msg.type === "agent_event" && msg.event) {
+      const event = msg.event;
+      setAgentEvents(prev => [...prev, event]);
+
+      if (event.type === "agent_started") {
+        setAgents(prev => [...prev, {
+          agentId: event.agentId,
+          role: event.role || "orchestrator",
+          task: event.task || "",
+          status: "active",
+          toolCallCount: 0,
+          startTime: new Date(event.timestamp)
+        }]);
+      }
+
+      if (event.type === "agent_completed") {
+        setAgents(prev => prev.map(a =>
+          a.agentId === event.agentId
+            ? { ...a, status: event.status || "completed", endTime: new Date(event.timestamp) }
+            : a
+        ));
+      }
+
+      if (event.type === "tool_started") {
+        setAgents(prev => prev.map(a =>
+          a.agentId === event.agentId
+            ? { ...a, toolCallCount: a.toolCallCount + 1 }
+            : a
+        ));
+      }
+    }
+
+    // Handle agent stats updates
+    if (msg.type === "agent_stats" && msg.stats) {
+      setStats(prev => ({
+        ...prev,
+        agents: msg.stats?.totalAgents || prev.agents,
+        searches: msg.stats?.searchCalls || prev.searches,
+        sources: msg.stats?.contentFetches || prev.sources
+      }));
+    }
 
     // Update stats based on message type
     if (msg.type === "tool_use") {
@@ -89,7 +140,9 @@ export function useResearch(): UseResearchReturn {
     setError(undefined);
     setFinalReport(undefined);
     setMessages([]);
-    setStats({ ...initialStats, agents: 1 });
+    setAgents([]);
+    setAgentEvents([]);
+    setStats({ ...initialStats, agents: 0 });
     startTimeRef.current = Date.now();
 
     try {
@@ -139,6 +192,20 @@ export function useResearch(): UseResearchReturn {
                 setFinalReport(message.content);
               }
 
+              // Handle report from status messages
+              if (message.type === "status" && message.status === "completed" && message.report) {
+                setFinalReport(message.report);
+
+                // Update stats with actual cost from the API
+                const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
+                setStats(prev => ({
+                  ...prev,
+                  duration,
+                  cost: message.stats?.costs?.totalCost || prev.cost,
+                  agents: message.stats?.agents?.totalAgents || prev.agents
+                }));
+              }
+
               if (message.type === "error") {
                 setError(message.error);
               }
@@ -150,15 +217,6 @@ export function useResearch(): UseResearchReturn {
           }
         }
       }
-
-      // Calculate final stats
-      const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
-      // Estimate cost based on turns (rough estimate: ~$0.01 per turn for Sonnet)
-      setStats(prev => ({
-        ...prev,
-        duration,
-        cost: prev.turns * 0.015
-      }));
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
@@ -178,7 +236,11 @@ export function useResearch(): UseResearchReturn {
     setError(undefined);
     setSessionId(undefined);
     setStats(initialStats);
+    setAgents([]);
+    setAgentEvents([]);
   }, []);
+
+  const activeAgents = agents.filter(a => a.status === "active").length;
 
   return {
     messages,
@@ -187,6 +249,9 @@ export function useResearch(): UseResearchReturn {
     finalReport,
     error,
     stats,
+    agents,
+    agentEvents,
+    activeAgents,
     startResearch,
     clearMessages
   };

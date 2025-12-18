@@ -1,12 +1,18 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
 import { NextRequest } from "next/server";
-import { deepResearchAgentConfig } from "@/lib/agent/config";
+import { runOrchestratorAgent } from "@/lib/agent/agents/orchestrator-v2";
+import { AgentActivityTracker } from "@/lib/agent/coordination/agent-tracker";
+import { logger } from "@/lib/logging/logger";
+import { readFile } from "fs/promises";
+import { join } from "path";
 
 export const maxDuration = 300; // 5 minutes for deep research
 
 export async function POST(request: NextRequest) {
+  // Generate a unique session ID
+  const sessionId = crypto.randomUUID();
+
   try {
-    const { topic, sessionId } = await request.json();
+    const { topic } = await request.json();
 
     if (!topic || typeof topic !== "string") {
       return new Response(
@@ -15,43 +21,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = `Conduct comprehensive deep research on the following topic and provide a detailed report:
-
-**Research Topic:** ${topic}
-
-Please follow your systematic research process:
-1. Break down the topic into key aspects
-2. Search for relevant sources using the available tools
-3. Read full content from the most promising sources
-4. Find similar content to expand your research
-5. Synthesize your findings into a comprehensive report
-
-Start by outlining your research plan, then execute it step by step. As you work, explain what you're doing so the user can follow your progress.`;
+    logger.info("Research request started", { sessionId, topic });
 
     const encoder = new TextEncoder();
+    const tracker = new AgentActivityTracker(sessionId, topic);
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // Setup event streaming from activity tracker
+          tracker.onEvent((event) => {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: "agent_event",
+                event
+              })}\n\n`)
+            );
+          });
+
           // Send initial message
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: "status",
               status: "started",
-              message: "Starting deep research...",
+              message: "Orchestrator agent starting multi-agent research...",
               topic
             })}\n\n`)
           );
 
-          for await (const message of query({
-            prompt,
-            options: {
-              ...deepResearchAgentConfig,
-              resume: sessionId,
-            }
+          // Run the Orchestrator agent
+          for await (const message of runOrchestratorAgent({
+            topic,
+            sessionId,
+            tracker
           })) {
             // Log raw message for debugging
-            console.log("SDK Message:", JSON.stringify(message, null, 2));
+            logger.debug("SDK Message received", {
+              sessionId,
+              messageType: message.type,
+              message: JSON.stringify(message).slice(0, 500)
+            });
+
+            // Extract usage data if present and track costs
+            if ((message as any).usage) {
+              const agentId = "ORCHESTRATOR"; // Could be extracted from message context if available
+              const model = "claude-sonnet-4-5";
+              tracker.trackUsage(agentId, model, (message as any).usage);
+            }
 
             // Transform message for client consumption
             const clientMessage = transformMessage(message);
@@ -60,31 +76,66 @@ Start by outlining your research plan, then execute it step by step. As you work
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify(clientMessage)}\n\n`)
               );
-            } else {
-              // Send raw message type for debugging if transform returns null
+            }
+
+            // Send agent statistics periodically
+            if (message.type === "result" || (message as {type: string}).type === "stream_event") {
+              const stats = tracker.getStatistics();
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({
-                  type: "debug",
-                  raw_type: (message as Record<string, unknown>).type,
-                  message: "Unhandled message type"
+                  type: "agent_stats",
+                  stats
                 })}\n\n`)
               );
             }
           }
 
-          // Send completion message
+          // Read the final report
+          let reportContent = "";
+          try {
+            const reportPath = join(process.cwd(), "files/reports/final_report.md");
+            reportContent = await readFile(reportPath, "utf-8");
+          } catch (error) {
+            logger.error("Failed to read final report", error as Error, { sessionId });
+            reportContent = "Error: Failed to load the generated report.";
+          }
+
+          // Send final enhanced statistics with costs, memory & agent details
+          const enhancedStats = tracker.getEnhancedStatistics();
+          const activities = tracker.getAgentActivities();
+
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: "status",
               status: "completed",
-              message: "Research completed"
+              message: "Multi-agent research completed",
+              report: reportContent,
+              stats: enhancedStats,
+              activities: activities.map(a => ({
+                agentId: a.agentId,
+                role: a.agentRole,
+                task: a.agentTask,
+                status: a.status,
+                toolCallCount: a.toolCalls.length,
+                duration: a.endTime ? a.endTime.getTime() - a.startTime.getTime() : null
+              }))
             })}\n\n`)
           );
+
+          // Finalize session logging with markdown generation
+          await tracker.finalizeSession();
+
+          logger.info("Research request completed", {
+            sessionId,
+            totalCost: enhancedStats.costs.totalCost.toFixed(4),
+            agentCount: enhancedStats.agents.totalAgents,
+            topic
+          });
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (error) {
-          console.error("Research error:", error);
+          logger.error("Research error", error as Error, { sessionId, topic });
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               type: "error",
@@ -104,7 +155,7 @@ Start by outlining your research plan, then execute it step by step. As you work
       }
     });
   } catch (error) {
-    console.error("API error:", error);
+    logger.error("API error", error as Error, { sessionId });
     return new Response(
       JSON.stringify({ error: "Failed to start research" }),
       { status: 500, headers: { "Content-Type": "application/json" } }
@@ -193,6 +244,7 @@ function transformMessage(message: Record<string, unknown>): Record<string, unkn
 // Summarize tool results for progress display
 function summarizeToolResult(toolName: string, result: Record<string, unknown>): string {
   switch (toolName) {
+    // Exa search tools
     case "mcp__exa-search__search":
     case "mcp__exa-search__search_papers":
     case "mcp__exa-search__search_news":
@@ -206,6 +258,36 @@ function summarizeToolResult(toolName: string, result: Record<string, unknown>):
     case "mcp__exa-search__find_similar":
       const similar = result.similar as Array<unknown> || [];
       return `Found ${similar.length} similar sources`;
+
+    // Multi-agent spawn tools
+    case "spawn_searcher":
+      const agentId = result.agent_id as string || "Unknown";
+      const status = result.status as string || "unknown";
+      const subtopic = result.subtopic as string || "";
+      if (status === "completed") {
+        return `${agentId} completed research on "${subtopic}"`;
+      }
+      return `${agentId} ${status}`;
+
+    case "spawn_analyzer":
+      if (result.status === "completed") {
+        const insights = (result.key_insights as Array<unknown>) || [];
+        return `Analyzer completed synthesis with ${insights.length} key insights`;
+      }
+      return `Analyzer ${result.status || "running"}`;
+
+    case "spawn_writer":
+      if (result.status === "completed") {
+        const wordCount = result.word_count as number || 0;
+        return `Writer completed ${wordCount}-word research report`;
+      }
+      return `Writer ${result.status || "running"}`;
+
+    // File operation tools
+    case "read_file":
+    case "list_files":
+    case "write_file":
+      return result.message as string || "File operation completed";
 
     default:
       return "Results received";
