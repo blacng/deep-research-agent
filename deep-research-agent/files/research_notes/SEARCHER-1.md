@@ -1,49 +1,60 @@
-# Architecture and Training Methodologies for Multimodal LLMs
+# Architectures and Frameworks of Agentic GraphRAG
 
 ## Overview
-The field of Multimodal Large Language Models (MLLMs) has shifted from modular "stitched" architectures—where a pre-trained vision encoder is attached to a frozen LLM—toward **unified architectures** and **early-fusion models**. Modern methodologies emphasize cross-modal alignment through specialized "connectors" like Q-Formers or cross-attention layers, and the use of large-scale **interleaved** datasets (images and text mixed in sequence) to enable true in-context multimodal reasoning.
+Agentic GraphRAG represents the convergence of Knowledge Graphs (KGs) with Agentic reasoning. While traditional RAG retrieves static text chunks based on vector similarity, Agentic GraphRAG employs autonomous agents to navigate, query, and reason over structured graph data. This field is currently dominated by two distinct architectural paradigms: **Microsoft's GraphRAG** (focused on pre-computed hierarchical summarization) and **LangGraph/LangChain** implementations (focused on dynamic, multi-hop reasoning loops).
 
----
+## 1. Microsoft GraphRAG Architecture
 
-## 1. Unified Multimodal Architectures
-Unified architectures aim to treat all modalities (text, image, audio, video) as a single sequence of tokens, allowing the model to learn joint representations from the start.
-
-### Key Findings
-*   **Early-Fusion (Chameleon):** Meta's Chameleon model uses a unified token-based approach where images are converted into discrete tokens and interleaved with text. Unlike modular models, it can both *understand* and *generate* images and text in any sequence using a single transformer [Chameleon: Mixed-Modal Early-Fusion Foundation Models](https://arxiv.org/html/2405.09818v1).
-*   **Joint Training (Gemini):** Google’s Gemini family was trained "natively multimodal" from the outset, rather than training a text model and then adding vision. This enables better cross-modal reasoning and state-of-the-art performance on benchmarks like MMLU and MMU [Gemini: A Family of Highly Capable Multimodal Models](https://assets.bwbx.io/documents/users/iqjWHBFdfxIU/r7G7RrtT6rnM/v0).
-*   **Unified Objective (Transfusion):** Recent research introduces "Transfusion," which combines the language modeling loss (next-token prediction) with a diffusion loss (for image patches) in a single model, allowing for high-quality image generation and text reasoning in one architecture [Computer Science > Artificial Intelligence](https://arxiv.org/abs/2408.11039).
-
-### Details
-Unified models like **Chameleon** differ from earlier models (like Flamingo) by avoiding modality-specific encoders at inference. Instead, they use a shared transformer backbone. Chameleon specifically employs a **VQ-GAN-based tokenizer** to map 512x512 images into 1024 discrete tokens, effectively turning image generation into a "next-token" prediction task identical to text generation. This allows the model to maintain "modal-agnostic" processing, where the transformer does not distinguish between a text token and an image token in its attention mechanism.
-
----
-
-## 2. Cross-Modal Alignment Techniques
-Alignment techniques are the "bridges" that allow a language model to interpret features from a vision encoder (like CLIP or SigLIP).
+Microsoft’s GraphRAG is designed to solve "global" queries (e.g., "What are the main themes in this dataset?") which traditional vector RAG struggles to answer. It relies heavily on an intensive **indexing phase** to pre-compute knowledge.
 
 ### Key Findings
-*   **Querying-Transformer (Q-Former):** Introduced in **BLIP-2**, the Q-Former uses a set of learnable "query tokens" to extract the most relevant visual information from a frozen image encoder, reducing the number of tokens passed to the LLM [BLIP-2: Efficient Vision-Language Pre-training](https://www.emergentmind.com/articles/2301.12597).
-*   **Cross-Attention Adapters (Llama 3.2):** Llama 3.2-Vision uses **cross-attention layers** to fuse visual information. Instead of just prepending visual tokens to the text (as in LLaVA), the model attends to visual features periodically throughout the transformer blocks [Understanding Multimodal LLaMA 3.2 Architecture](https://j-qi.medium.com/inside-mllama-3-2-understanding-metas-vision-language-model-architecture-ae12ad24dcbf).
-*   **Projection Layers (LLaVA):** The simplest alignment involves a Linear or MLP projector that maps visual feature vectors into the LLM's word embedding space. Research suggests that while simple, these projections are highly effective when paired with instruction tuning [The Revolution of Multimodal Large Language Models: A Survey](https://aclanthology.org/2024.findings-acl.807.pdf).
+- **Hierarchical Leveled Summaries**: The core innovation is the creation of community summaries at multiple levels of granularity. The system uses the **Leiden algorithm** to detect communities of closely related entities [Welcome to GraphRAG](https://microsoft.github.io/graphrag/).
+- **Two-Step Pipeline**:
+    1.  **Indexing (ETL)**: Turns raw text into a graph, detects communities, and generates natural language summaries for every community.
+    2.  **Querying**: Supports "Global Search" (using summaries) and "Local Search" (using entity neighbors).
+- **Performance**: Microsoft research indicates this method significantly outperforms baseline RAG on comprehensive Q&A tasks involving entire datasets.
 
-### Details
-**Q-Former** (Salesforce) acts as a bottleneck, forcing the model to condense high-dimensional visual data into a small set of visual "words" that the LLM can understand. This is computationally efficient compared to the **Flamingo** approach, which uses **Perceiver Resamplers** and gated cross-attention. Newer models like **Llama 3.2** have moved toward integrated cross-attention, which allows the model to "look back" at the image features at various depths of the network, improving the grounding of text in visual details.
+### Detailed Architecture
+The Microsoft GraphRAG architecture flows as follows:
+1.  **Text Chunking**: Source documents are split into chunks.
+2.  **Element Extraction**: An LLM extracts entities and relationships from each chunk to form a graph.
+3.  **Community Detection**: The graph is clustered using the Leiden algorithm to find hierarchical communities (e.g., Level 0: "Tech Industry", Level 1: "Microsoft", "Apple").
+4.  **Community Summarization**: An LLM generates a summary for every community node.
+5.  **Global Search**: When a user asks a high-level question, the system aggregates relevant community summaries rather than retrieving raw text chunks, ensuring a holistic answer.
 
----
+## 2. LangGraph and LangChain Implementations
 
-## 3. Multimodal Tokenization and Data Strategies
-How data is represented and organized during training determines the model's ability to handle complex, interleaved real-world content.
+Unlike Microsoft’s pre-computation focus, LangGraph (built on LangChain) focuses on **runtime orchestration**. It models the RAG process itself as a graph (StateGraph), where nodes are agents or tools and edges are control flow conditions.
 
 ### Key Findings
-*   **Discrete vs. Continuous Tokenization:** **Discrete tokenization** (as used in Chameleon) allows images to be generated as tokens, whereas **continuous tokenization** (passing raw embeddings from CLIP) is typically used only for understanding tasks [Discrete Tokenization for Multimodal LLMs: A Comprehensive Survey](https://arxiv.org/pdf/2507.22920).
-*   **Interleaved Datasets:** Models trained on interleaved data (e.g., **OBELICS**, **MMC4**) perform significantly better on multi-image reasoning and in-context learning than those trained only on image-caption pairs [An Open Web-Scale Filtered Dataset of Interleaved Image-Text ...](https://huggingface.co/papers/2306.16527).
-*   **Scale of Interleaved Data:** The **MMC4** dataset (Multimodal C4) provides billions of tokens across 100 million documents where images are naturally placed within text, enabling models to learn the "logic" of how images and text relate in context [Multimodal C4: An Open, Billion-scale Corpus of Images Interleaved ...](https://arxiv.org/abs/2304.06939).
+- **StateGraph Architecture**: LangGraph allows developers to build "cyclic" graphs where an agent can loop back to a previous state (e.g., *Retrieve -> Grade -> Re-write -> Retrieve again*) [Built with LangGraph! #18](https://medium.com/codetodeploy/built-with-langgraph-18-rag-agents-b1c0bb0832f6).
+- **Human-in-the-Loop**: The architecture supports breakpoints where the agent pauses for human approval before executing a graph query or generating a final answer.
+- **Dynamic Query Construction**: Agents in this framework often use tools like `GraphCypherQAChain` to translate natural language into Cypher queries (for Neo4j) dynamically at runtime.
 
-### Details
-Training data has evolved from simple pairs (Image: "A dog", Text: "A photo of a dog") to **document-level sequences**. For example, a blog post about a recipe contains text, followed by an image of ingredients, followed by more text. **OBELICS** and **MMC4** are the gold standards for this, allowing models to learn that an image refers to the text preceding it. In terms of tokenization, **VQ (Vector Quantization)** techniques are increasingly used to create a "visual vocabulary," though they face challenges like "codebook collapse" where only a few tokens are used frequently.
+### Detailed Implementation
+A typical LangGraph Agentic RAG workflow involves:
+*   **Router Node**: Decides whether the query requires a vector search (for semantic similarity) or a graph search (for structural relationships).
+*   **Retrieval Node**: Executes the search. In a graph context, this might be a "neighbor expansion" (finding all nodes connected to entity X).
+*   **Grader Node**: An LLM evaluates the retrieved documents/triples. If they are insufficient, the flow cycles back to the Retrieval Node with a rewritten query.
 
----
+## 3. Agent Reasoning Loops on Knowledge Graphs
 
-## Cross-Cutting Insights
-*   **The Convergence of Modalities:** We are moving away from "Vision-Language" models toward "General Purpose Token Processors." Whether a token represents a sound, a pixel, or a word, the underlying transformer architecture remains largely the same.
-*   **Efficiency vs. Capability:** Modular "connector" models (like L
+Agentic reasoning transforms the Knowledge Graph from a static database into an environment for exploration. This is often referred to as "Multi-Hop Reasoning" or "Chain-of-Thought on Graphs."
+
+### Key Findings
+- **Iterative Exploration (INRAExplorer)**: Recent research demonstrates agents that perform "multi-hop" retrieval. The agent retrieves a node, analyzes its neighbors, and decides which path to follow next, mimicking human research behavior [Agentic RAG with Knowledge Graphs](https://arxiv.org/html/2507.16507v1).
+- **Plan-Execute-Observe**:
+    1.  **Plan**: Agent breaks a complex question (e.g., "Who co-authored with the inventor of X?") into sub-steps.
+    2.  **Execute**: Agent queries the graph for "Inventor of X".
+    3.  **Observe**: Agent gets "Person A".
+    4.  **Loop**: Agent generates a new query for "Co-authors of Person A".
+- **Self-Correction**: If a graph path leads to a dead end (no relevant connections), the agent can backtrack and try a different relationship type.
+
+## 4. Graph Construction Methodologies
+
+The quality of Agentic GraphRAG depends entirely on the quality of the underlying graph. Construction has moved from manual ontology engineering to LLM-driven pipelines.
+
+### Key Findings
+- **LLM-Based Extraction**: The standard approach now involves prompting an LLM to extract triplets (`Subject`, `Predicate`, `Object`) from unstructured text.
+- **Ontology Mapping vs. Schema-Free**:
+    -
