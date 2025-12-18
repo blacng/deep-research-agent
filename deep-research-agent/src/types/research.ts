@@ -114,3 +114,42 @@ export interface ResearchStats {
   duration: number;
   estimatedCost: number;
 }
+
+/**
+ * Dashboard Types
+ */
+
+export type ResearchPhase = "idle" | "planning" | "searching" | "analyzing" | "writing" | "complete";
+
+export interface ChartDataPoint {
+  timestamp: number;
+  value: number;
+  label?: string;
+}
+
+export interface CostSegment {
+  name: string;
+  value: number;
+  color: string;
+  [key: string]: string | number;
+}
+
+export interface AgentNodeData {
+  agentId: string;
+  role: "orchestrator" | "searcher" | "analyzer" | "writer";
+  task: string;
+  status: "active" | "completed" | "failed";
+  toolCallCount: number;
+  duration?: number;
+}
+
+export interface ActivityLogItem {
+  id: string;
+  type: "tool_call" | "agent_event" | "status";
+  agentId?: string;
+  agentRole?: "orchestrator" | "searcher" | "analyzer" | "writer";
+  toolName?: string;
+  description: string;
+  timestamp: Date;
+  isComplete?: boolean;
+}

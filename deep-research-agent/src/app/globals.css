@@ -123,3 +123,138 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Agent Role Colors */
+:root {
+  --agent-orchestrator: #8B5CF6;
+  --agent-searcher: #3B82F6;
+  --agent-analyzer: #10B981;
+  --agent-writer: #F97316;
+  --agent-orchestrator-glow: rgba(139, 92, 246, 0.4);
+  --agent-searcher-glow: rgba(59, 130, 246, 0.4);
+  --agent-analyzer-glow: rgba(16, 185, 129, 0.4);
+  --agent-writer-glow: rgba(249, 115, 22, 0.4);
+}
+
+/* Custom Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--glow-color, rgba(139, 92, 246, 0.4));
+  }
+  50% {
+    box-shadow: 0 0 20px 5px var(--glow-color, rgba(139, 92, 246, 0.4));
+  }
+}
+
+@keyframes flow-particle {
+  0% {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes typing-cursor {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.animate-typing-cursor {
+  animation: typing-cursor 1s step-end infinite;
+}
+
+/* Glow effects for different agent roles */
+.glow-orchestrator {
+  --glow-color: var(--agent-orchestrator-glow);
+}
+
+.glow-searcher {
+  --glow-color: var(--agent-searcher-glow);
+}
+
+.glow-analyzer {
+  --glow-color: var(--agent-analyzer-glow);
+}
+
+.glow-writer {
+  --glow-color: var(--agent-writer-glow);
+}
+
+/* React Flow custom styles */
+.react-flow__node {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+  transition: stroke 0.2s ease;
+}
+
+.react-flow__edge.animated path {
+  stroke-dasharray: 5;
+  animation: dash 0.5s linear infinite;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+/* Scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

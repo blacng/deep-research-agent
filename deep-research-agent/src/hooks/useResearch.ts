@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { AgentInfo, AgentEvent, AgentStats } from "@/types/research";
+import { useState, useCallback, useRef, useMemo } from "react";
+import { AgentInfo, AgentEvent, AgentStats, ResearchPhase, ChartDataPoint, CostSegment } from "@/types/research";
 
 export interface ResearchMessage {
   id: string;
@@ -39,6 +39,11 @@ export interface UseResearchReturn {
   agents: AgentInfo[];
   agentEvents: AgentEvent[];
   activeAgents: number;
+  currentPhase: ResearchPhase;
+  chartData: {
+    toolCallsOverTime: ChartDataPoint[];
+    costBreakdown: CostSegment[];
+  };
   startResearch: (topic: string) => Promise<void>;
   clearMessages: () => void;
 }
@@ -242,6 +247,50 @@ export function useResearch(): UseResearchReturn {
 
   const activeAgents = agents.filter(a => a.status === "active").length;
 
+  // Compute current research phase based on active agents
+  const currentPhase: ResearchPhase = useMemo(() => {
+    if (!isResearching && !finalReport) return "idle";
+    if (!isResearching && finalReport) return "complete";
+
+    const hasActiveSearchers = agents.some(a => a.role === "searcher" && a.status === "active");
+    const hasActiveAnalyzer = agents.some(a => a.role === "analyzer" && a.status === "active");
+    const hasActiveWriter = agents.some(a => a.role === "writer" && a.status === "active");
+    const hasActiveOrchestrator = agents.some(a => a.role === "orchestrator" && a.status === "active");
+
+    if (hasActiveWriter) return "writing";
+    if (hasActiveAnalyzer) return "analyzing";
+    if (hasActiveSearchers) return "searching";
+    if (hasActiveOrchestrator) return "planning";
+
+    return "planning";
+  }, [isResearching, finalReport, agents]);
+
+  // Compute chart data from events
+  const chartData = useMemo(() => {
+    // Tool calls over time
+    const toolCallsOverTime: ChartDataPoint[] = [];
+    let cumulativeCount = 0;
+
+    agentEvents
+      .filter(e => e.type === "tool_started")
+      .forEach((event, index) => {
+        cumulativeCount++;
+        toolCallsOverTime.push({
+          timestamp: new Date(event.timestamp).getTime(),
+          value: cumulativeCount,
+          label: event.toolName || "Tool",
+        });
+      });
+
+    // Cost breakdown (estimated based on agent activity)
+    const costBreakdown: CostSegment[] = [
+      { name: "LLM Costs", value: stats.cost * 0.85, color: "#8B5CF6" },
+      { name: "Tool Costs", value: stats.cost * 0.15, color: "#3B82F6" },
+    ];
+
+    return { toolCallsOverTime, costBreakdown };
+  }, [agentEvents, stats.cost]);
+
   return {
     messages,
     isResearching,
@@ -252,6 +301,8 @@ export function useResearch(): UseResearchReturn {
     agents,
     agentEvents,
     activeAgents,
+    currentPhase,
+    chartData,
     startResearch,
     clearMessages
   };
