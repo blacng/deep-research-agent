@@ -11,6 +11,7 @@ import Exa from "exa-js";
 import { streamMessage, createTextMessage, extractText, type GeminiTool as AnthropicTool } from "../gemini-client";
 import { SearcherConfig, SearcherResult } from "./types";
 import { logger } from "../../logging/logger";
+import { getFilesBasePath } from "../config";
 
 const exa = new Exa(process.env.EXA_API_KEY);
 
@@ -275,7 +276,10 @@ Be thorough and cite all claims.`;
     const findings = extractText(response);
 
     // Save findings to file
-    const outputPath = join(process.cwd(), "files/research_notes", `${agentId}.md`);
+    const basePath = getFilesBasePath();
+    const notesDir = join(basePath, "research_notes");
+    await mkdir(notesDir, { recursive: true });
+    const outputPath = join(notesDir, `${agentId}.md`);
     await writeFile(outputPath, findings);
 
     // Extract summary

@@ -66,20 +66,22 @@ export class StructuredLogger {
   private logger: winston.Logger;
 
   constructor() {
-    this.logger = winston.createLogger({
-      level: process.env.LOG_LEVEL || "info",
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.errors({ stack: true })
-      ),
-      transports: [
-        // Console (development) - human-readable
-        new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.colorize(),
-            winston.format.simple()
-          )
-        }),
+    // Check if running on Vercel (read-only filesystem)
+    const isVercel = process.env.VERCEL === "1";
+
+    const transports: winston.transport[] = [
+      // Console (always enabled) - human-readable
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        )
+      })
+    ];
+
+    // Only add file transports when NOT on Vercel
+    if (!isVercel) {
+      transports.push(
         // File - all logs (TOON format)
         new winston.transports.File({
           filename: "logs/combined.log",
@@ -95,15 +97,29 @@ export class StructuredLogger {
           maxFiles: 5,
           format: toonFormat
         })
-        // Session-specific transports added dynamically via addSessionTransport()
-      ]
+      );
+    }
+
+    this.logger = winston.createLogger({
+      level: process.env.LOG_LEVEL || "info",
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.errors({ stack: true })
+      ),
+      transports
     });
   }
 
   /**
    * Add a session-specific log file transport with TOON format
+   * Skipped on Vercel due to read-only filesystem
    */
   addSessionTransport(sessionId: string): void {
+    // Skip on Vercel - filesystem is read-only
+    if (process.env.VERCEL === "1") {
+      return;
+    }
+
     const timestamp = new Date().toISOString().replace(/:/g, "-");
     this.logger.add(new winston.transports.File({
       filename: `logs/sessions/session_${sessionId}_${timestamp}.log`,

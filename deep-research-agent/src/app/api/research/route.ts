@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { runOrchestratorAgent } from "@/lib/agent/agents/orchestrator-v2";
 import { AgentActivityTracker } from "@/lib/agent/coordination/agent-tracker";
 import { logger } from "@/lib/logging/logger";
+import { getFilesBasePath } from "@/lib/agent/config";
 import { readFile } from "fs/promises";
 import { join } from "path";
 
@@ -93,7 +94,8 @@ export async function POST(request: NextRequest) {
           // Read the final report
           let reportContent = "";
           try {
-            const reportPath = join(process.cwd(), "files/reports/final_report.md");
+            const basePath = getFilesBasePath();
+            const reportPath = join(basePath, "reports/final_report.md");
             reportContent = await readFile(reportPath, "utf-8");
           } catch (error) {
             logger.error("Failed to read final report", error as Error, { sessionId });

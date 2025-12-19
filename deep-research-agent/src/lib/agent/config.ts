@@ -2,6 +2,17 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { exaSearchTools } from "./tools";
 
+/**
+ * Get the base path for file storage
+ * Uses /tmp on Vercel (read-only filesystem), project directory locally
+ */
+export function getFilesBasePath(): string {
+  if (process.env.VERCEL === "1") {
+    return "/tmp";
+  }
+  return join(process.cwd(), "files");
+}
+
 // Read the system prompt from the markdown file
 const promptPath = join(process.cwd(), "src/lib/agent/prompts/research-agent.md");
 export const DEEP_RESEARCH_SYSTEM_PROMPT = readFileSync(promptPath, "utf-8");

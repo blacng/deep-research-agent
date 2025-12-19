@@ -10,6 +10,7 @@ import { join } from "path";
 import { streamMessage, createTextMessage, extractText } from "../gemini-client";
 import { AnalyzerConfig, AnalyzerResult } from "./types";
 import { logger } from "../../logging/logger";
+import { getFilesBasePath } from "../config";
 
 /**
  * Read the Analyzer agent system prompt
@@ -60,14 +61,16 @@ export async function createAnalyzerAgent(
     searcherCount
   });
 
+  const basePath = getFilesBasePath();
+
   // Ensure output directory exists
-  await mkdir(join(process.cwd(), "files/analysis"), { recursive: true });
+  await mkdir(join(basePath, "analysis"), { recursive: true });
 
   const systemPrompt = readAnalyzerPrompt();
 
   try {
     // Read research notes directly
-    const notesDir = join(process.cwd(), "files/research_notes");
+    const notesDir = join(basePath, "research_notes");
     const noteFiles = readdirSync(notesDir).filter(f => f.endsWith(".md"));
 
     let allNotes = "";
@@ -106,7 +109,7 @@ Create your synthesis following the format specified in your system prompt.`;
     const analysis = extractText(response);
 
     // Save the synthesis
-    const outputPath = join(process.cwd(), "files/analysis/synthesis.md");
+    const outputPath = join(basePath, "analysis/synthesis.md");
     await writeFile(outputPath, analysis);
 
     // Extract insights and themes

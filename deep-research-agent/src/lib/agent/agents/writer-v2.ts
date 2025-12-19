@@ -10,6 +10,7 @@ import { join } from "path";
 import { streamMessage, createTextMessage, extractText } from "../gemini-client";
 import { WriterConfig, WriterResult } from "./types";
 import { logger } from "../../logging/logger";
+import { getFilesBasePath } from "../config";
 
 /**
  * Read the Writer agent system prompt
@@ -32,15 +33,17 @@ export async function createWriterAgent(
     topic
   });
 
+  const basePath = getFilesBasePath();
+
   // Ensure output directory exists
-  await mkdir(join(process.cwd(), "files/reports"), { recursive: true });
+  await mkdir(join(basePath, "reports"), { recursive: true });
 
   const systemPrompt = readWriterPrompt();
 
   try {
     // Read all research materials
-    const analysisPath = join(process.cwd(), "files/analysis/synthesis.md");
-    const notesDir = join(process.cwd(), "files/research_notes");
+    const analysisPath = join(basePath, "analysis/synthesis.md");
+    const notesDir = join(basePath, "research_notes");
 
     let analysisContent = "";
     try {
@@ -93,7 +96,7 @@ Output the complete markdown document for the final report.`;
     const report = extractText(response);
 
     // Save the report
-    const reportPath = join(process.cwd(), "files/reports/final_report.md");
+    const reportPath = join(basePath, "reports/final_report.md");
     await writeFile(reportPath, report);
 
     // Calculate metrics
