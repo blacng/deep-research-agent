@@ -21,6 +21,7 @@ interface ActivityItem {
 
 interface LiveActivityFeedProps {
   messages: ActivityItem[];
+  isResearching?: boolean;
   className?: string;
 }
 
@@ -59,11 +60,12 @@ function getDescription(item: ActivityItem): string {
   return "";
 }
 
-function ActivityItemComponent({ item }: { item: ActivityItem }) {
+function ActivityItemComponent({ item, isResearching = true }: { item: ActivityItem; isResearching?: boolean }) {
   const Icon = getIcon(item);
   const label = getLabel(item);
   const description = getDescription(item);
-  const isComplete = item.type === "tool_result" || item.type === "status";
+  // Item is complete if: research is done, or it's a tool_result/status type
+  const isComplete = !isResearching || item.type === "tool_result" || item.type === "status";
   const isError = item.type === "error";
   const roleColor = item.agentRole ? agentColors[item.agentRole] : null;
 
@@ -139,7 +141,7 @@ function ActivityItemComponent({ item }: { item: ActivityItem }) {
   );
 }
 
-export function LiveActivityFeed({ messages, className }: LiveActivityFeedProps) {
+export function LiveActivityFeed({ messages, isResearching = false, className }: LiveActivityFeedProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -187,7 +189,7 @@ export function LiveActivityFeed({ messages, className }: LiveActivityFeedProps)
         >
           <AnimatePresence mode="popLayout">
             {messages.map((item) => (
-              <ActivityItemComponent key={item.id} item={item as ActivityItem} />
+              <ActivityItemComponent key={item.id} item={item as ActivityItem} isResearching={isResearching} />
             ))}
           </AnimatePresence>
         </div>

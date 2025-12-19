@@ -119,7 +119,7 @@ export default function Home() {
                   />
 
                   {/* Live Activity Feed */}
-                  <LiveActivityFeed messages={activityItems} />
+                  <LiveActivityFeed messages={activityItems} isResearching={isResearching} />
 
                   {/* Error Display */}
                   {error && (
